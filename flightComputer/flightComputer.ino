@@ -6,7 +6,7 @@ float ledDeltaTime; //Time since last LED switch [ms]
 float lastExecutionTime; //Time of last loop execution
 
 long ledDelay = 2000;
-long preDelay = 2000; //Different launch states led frequencies
+long preDelay = 1000; //Different launch states led frequencies
 
 int commsDelay = 1000; //Delay on xBee, so we don't flood the airwaves
 long commsDeltaTime;
@@ -18,14 +18,16 @@ long lastTime = 0;
 
 float lastAltitude = 0;
 
+int led = 11;
+
 void setup() {
-  // put your setup code here, to run once:
   state = "preLaunch";
   ledDeltaTime = 0;
   lastExecutionTime = 0;
   lastTransmission = 0;
-  Serial.begin(9600);
-  
+  Serial.begin(9600); //Serial port for comms
+
+  pinMode(led, OUTPUT);
 }
 
 void loop() {
@@ -34,17 +36,16 @@ void loop() {
   commsDeltaTime = millis() - lastTransmission;
   long deltaTime = millis() - lastTime;
 
-  //Blink the LED
-  blinkStatus(ledDelay);
-
-  //These are essential functions for flight that are executed regardless of flight state - for now they are just empty functions, but as more sensors/equipment get hooked up to the craft, they will be filled in
+  //These are essential functions for flight that are executed regardless of flight state - for now they are just empty functions, 
+  //but as more sensors/equipment get hooked up to the craft, they will be filled in
+  //TODO: Add humidity
   float altitude = getAltitude();
   float pressure = getPressure();
   float temperature = getTemp();
   String gpsPosition = getPosition(); //Will this decleration come back to bite me? Yes. Yes it will
 
   float deltaAltitude = (altitude - lastAltitude)/(deltaTime/1000); //Unless I'm very bad at both math and programming, this should be our vertical velocity, in m/s
-
+  
   //State machine
   if (state == "preLaunch") {
     if (Serial.readString() == "go") {
@@ -75,9 +76,16 @@ void loop() {
   if (buzzing) {
     //Buzz
   }
+
+  
+  //Blink the LED
+  blinkStatus(ledDelay);
+
+  //Transmit
+  transmit(commsDelay);
 }
 
-
+//Also going to be doing SD card saving here, as data points will be the same 
 void transmit(long delayTime) {
   if (commsDeltaTime > delayTime) {
     //transmit
@@ -86,11 +94,14 @@ void transmit(long delayTime) {
 }
 
 void blinkStatus(long delayTime) {
-  if (ledDeltaTime > delayTime) {
-    if (ledOn) {
-      //Turn led off
+  Serial.println(ledOn);
+  if (ledDeltaTime >= delayTime) {
+    if (ledOn == 0) {
+      digitalWrite(led, HIGH);   // turn the LED on (HIGH is the voltage level
+      ledOn = 1;
     } else {
-      //Turn led on
+      digitalWrite(led, LOW);    // turn the LED off by making the voltage LOW
+      ledOn = 0;
     }
     lastExecutionTime = millis();
   }
