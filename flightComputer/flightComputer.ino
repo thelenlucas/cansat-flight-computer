@@ -5,6 +5,21 @@ float ledDeltaTime; //Time since last LED switch [ms]
 
 float lastExecutionTime; //Time of last loop execution
 
+//BME Setup
+#include <Wire.h>
+#include <SPI.h>
+#include <Adafruit_Sensor.h>
+#include <Adafruit_BME280.h>
+
+#define BME_SCK 13
+#define BME_MISO 12
+#define BME_MOSI 11
+#define BME_CS 10
+
+#define SEALEVELPRESSURE_HPA (1013.25)
+
+Adafruit_BME280 bme;
+
 long ledDelay = 2000;
 long preDelay = 1000; //Different launch states led frequencies
 
@@ -18,7 +33,7 @@ long lastTime = 0;
 
 float lastAltitude = 0;
 
-int led = 11;
+int led = 13;
 
 void setup() {
   state = "preLaunch";
@@ -28,6 +43,24 @@ void setup() {
   Serial.begin(9600); //Serial port for comms
 
   pinMode(led, OUTPUT);
+
+  //BME Initialization
+  unsigned status;
+    
+    // default settings
+    status = bme.begin();  
+    // You can also pass in a Wire library object like &Wire2
+    // status = bme.begin(0x76, &Wire2)
+    if (!status) {
+        Serial.println("Could not find a valid BME280 sensor, check wiring, address, sensor ID!");
+        Serial.print("SensorID was: 0x"); Serial.println(bme.sensorID(),16);
+        Serial.print("        ID of 0xFF probably means a bad address, a BMP 180 or BMP 085\n");
+        Serial.print("   ID of 0x56-0x58 represents a BMP 280,\n");
+        Serial.print("        ID of 0x60 represents a BME 280.\n");
+        Serial.print("        ID of 0x61 represents a BME 680.\n");
+        while (1) delay(10);
+    }
+    
 }
 
 void loop() {
@@ -39,10 +72,13 @@ void loop() {
   //These are essential functions for flight that are executed regardless of flight state - for now they are just empty functions, 
   //but as more sensors/equipment get hooked up to the craft, they will be filled in
   //TODO: Add humidity
-  float altitude = getAltitude();
-  float pressure = getPressure();
-  float temperature = getTemp();
+  float altitude = bme.readAltitude(SEALEVELPRESSURE_HPA);
+  float pressure = bme.readPressure();
+  float temperature = bme.readTemperature();
+  float humidity = bme.readHumidity();
   String gpsPosition = getPosition(); //Will this decleration come back to bite me? Yes. Yes it will
+
+  Serial.println(humidity);
 
   float deltaAltitude = (altitude - lastAltitude)/(deltaTime/1000); //Unless I'm very bad at both math and programming, this should be our vertical velocity, in m/s
   
@@ -94,7 +130,6 @@ void transmit(long delayTime) {
 }
 
 void blinkStatus(long delayTime) {
-  Serial.println(ledOn);
   if (ledDeltaTime >= delayTime) {
     if (ledOn == 0) {
       digitalWrite(led, HIGH);   // turn the LED on (HIGH is the voltage level
@@ -105,22 +140,6 @@ void blinkStatus(long delayTime) {
     }
     lastExecutionTime = millis();
   }
-}
-
-float getAltitude() {
-  
-}
-
-float getPressure() {
-  
-}
-
-float getTemp() {
-  
-}
-
-String getPosition() {
-  
 }
 
 void drop() {
