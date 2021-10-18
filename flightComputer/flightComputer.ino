@@ -1,9 +1,13 @@
+#include <TinyGPS.h>
 String state; //Stores current state of craft
 
 bool ledOn; //Bool for dynamic blinking of LED
 float ledDeltaTime; //Time since last LED switch [ms]
 
 float lastExecutionTime; //Time of last loop execution
+
+//GPS Setup
+TinyGPS gps;
 
 //BME Setup
 #include <Wire.h>
@@ -33,9 +37,12 @@ bool buzzing = false;
 long lastTime = 0;
 
 float lastAltitude = 0;
+float offsetAltitude = 0;
 
 int led = 13;
-int externalLED = 4;
+int externalLED = 11;
+
+int buzzer = 10;
 
 void setup() {
   state = "preLaunch";
@@ -46,6 +53,8 @@ void setup() {
 
   pinMode(led, OUTPUT);
   pinMode(externalLED, OUTPUT);
+
+  pinMode(buzzer, OUTPUT);
 
   //BME Initialization
   unsigned status;
@@ -65,11 +74,21 @@ void setup() {
     }
 
   // Start the serial port for the transmitter
+  Serial3.begin(9600);
+
+  //Start the serial port for the openlog
   Serial5.begin(9600);
+
+  Serial2.begin(9600);
+
+  offsetAltitude = bme.readAltitude(SEALEVELPRESSURE_HPA);
     
 }
 
 void loop() {
+  Serial.println(Serial2.readString());
+  Serial.println();
+  
   //Time Determination
   ledDeltaTime = millis() - lastExecutionTime ;
   commsDeltaTime = millis() - lastTransmission;
@@ -77,17 +96,15 @@ void loop() {
 
   //These are essential functions for flight that are executed regardless of flight state - for now they are just empty functions, 
   //but as more sensors/equipment get hooked up to the craft, they will be filled in
-  float altitudeHeight = bme.readAltitude(SEALEVELPRESSURE_HPA);
+  float altitudeHeight = bme.readAltitude(SEALEVELPRESSURE_HPA) - offsetAltitude;
   float pressure = bme.readPressure();
   float temperature = bme.readTemperature();
   float humidity = bme.readHumidity();
   //String gpsPosition = getPosition(); //Will this decleration come back to bite me? Yes. Yes it will
 
-  float deltaAltitude = (altitudeHeight - lastAltitude)/(deltaTime/1000); //Unless I'm very bad at both math and programming, this should be our vertical velocity, in m/s
-
   //State machine
   if (state == "preLaunch") {
-    if (Serial5.readString() == "go") {
+    if (Serial3.readString() == "go") {
       ledDelay = preDelay;
       state = "goForLaunch";
     }
@@ -107,7 +124,7 @@ void loop() {
     state = "descending"; {
     }
   } else if (state == "descending") {
-    if (deltaAltitude < 1) {
+    if (altitudeHeight < 5) {
       state == "landing";
     }
   } else if (state == "landing") {
@@ -115,21 +132,25 @@ void loop() {
   }
 
   if (buzzing) {
-    //Buzz
+    digitalWrite(buzzer, HIGH);
   }
 
   
   //Blink the LED
   blinkStatus(ledDelay);
 
+  String currentData = String(millis()) +","+ String(altitudeHeight) +","+ String(pressure) +","+ String(temperature) +","+ String(humidity);
   //Transmit
-  transmit(commsDelay, String(deltaAltitude));
+  transmit(commsDelay, currentData);
+
+  //Save
+  Serial5.println(currentData);
 }
 
 //Also going to be doing SD card saving here, as data points will be the same 
 void transmit(long delayTime, String data) {
   if (commsDeltaTime > delayTime) {
-    Serial5.println(data);
+    Serial3.println(data);
     lastTransmission = millis();
   }
 }
